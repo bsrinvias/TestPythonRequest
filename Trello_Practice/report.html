@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>report.html</title>
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) { // eslint-disable-line no-redeclare
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function findAll(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sortColumn(elem) {
+    toggleSortStates(elem);
+    const colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    let key;
+    if (elem.classList.contains('result')) {
+        key = keyResult;
+    } else if (elem.classList.contains('links')) {
+        key = keyLink;
+    } else {
+        key = keyAlpha;
+    }
+    sortTable(elem, key(colIndex));
+}
+
+function showAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(showExtras);
+}
+
+function hideAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(hideExtras);
+}
+
+function showExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.remove('collapsed');
+    expandcollapse.classList.remove('expander');
+    expandcollapse.classList.add('collapser');
+}
+
+function hideExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.add('collapsed');
+    expandcollapse.classList.remove('collapser');
+    expandcollapse.classList.add('expander');
+}
+
+function showFilters() {
+    let visibleString = getQueryParameter('visible') || 'all';
+    visibleString = visibleString.toLowerCase();
+    const checkedItems = visibleString.split(',');
+
+    const filterItems = document.getElementsByClassName('filter');
+    for (let i = 0; i < filterItems.length; i++) {
+        filterItems[i].hidden = false;
+
+        if (visibleString != 'all') {
+            filterItems[i].checked = checkedItems.includes(filterItems[i].getAttribute('data-test-result'));
+            filterTable(filterItems[i]);
+        }
+    }
+}
+
+function addCollapse() {
+    // Add links for show/hide all
+    const resulttable = find('table#results-table');
+    const showhideall = document.createElement('p');
+    showhideall.innerHTML = '<a href="javascript:showAllExtras()">Show all details</a> / ' +
+                            '<a href="javascript:hideAllExtras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    findAll('.col-result').forEach(function(elem) {
+        const collapsed = getQueryParameter('collapsed') || 'Passed';
+        const extras = elem.parentNode.nextElementSibling;
+        const expandcollapse = document.createElement('span');
+        if (extras.classList.contains('collapsed')) {
+            expandcollapse.classList.add('expander');
+        } else if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add('collapsed');
+            expandcollapse.classList.add('expander');
+        } else {
+            expandcollapse.classList.add('collapser');
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener('click', function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains('collapsed')) {
+                showExtras(event.currentTarget);
+            } else {
+                hideExtras(event.currentTarget);
+            }
+        });
+    });
+}
+
+function getQueryParameter(name) {
+    const match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () { // eslint-disable-line no-unused-vars
+    resetSortHeaders();
+
+    addCollapse();
+
+    showFilters();
+
+    sortColumn(find('.initial-sort'));
+
+    findAll('.sortable').forEach(function(elem) {
+        elem.addEventListener('click',
+            function() {
+                sortColumn(elem);
+            }, false);
+    });
+}
+
+function sortTable(clicked, keyFunc) {
+    const rows = findAll('.results-table-row');
+    const reversed = !clicked.classList.contains('asc');
+    const sortedRows = sort(rows, keyFunc, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    const thead = document.getElementById('results-table-head');
+    document.getElementById('results-table').remove();
+    const parent = document.createElement('table');
+    parent.id = 'results-table';
+    parent.appendChild(thead);
+    sortedRows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName('BODY')[0].appendChild(parent);
+}
+
+function sort(items, keyFunc, reversed) {
+    const sortArray = items.map(function(item, i) {
+        return [keyFunc(item), i];
+    });
+
+    sortArray.sort(function(a, b) {
+        const keyA = a[0];
+        const keyB = b[0];
+
+        if (keyA == keyB) return 0;
+
+        if (reversed) {
+            return keyA < keyB ? 1 : -1;
+        } else {
+            return keyA > keyB ? 1 : -1;
+        }
+    });
+
+    return sortArray.map(function(item) {
+        const index = item[1];
+        return items[index];
+    });
+}
+
+function keyAlpha(colIndex) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[colIndex].firstChild.data.toLowerCase();
+    };
+}
+
+function keyLink(colIndex) {
+    return function(elem) {
+        const dataCell = elem.childNodes[1].childNodes[colIndex].firstChild;
+        return dataCell == null ? '' : dataCell.innerText.toLowerCase();
+    };
+}
+
+function keyResult(colIndex) {
+    return function(elem) {
+        const strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+            'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[colIndex].firstChild.data);
+    };
+}
+
+function resetSortHeaders() {
+    findAll('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    findAll('.sortable').forEach(function(elem) {
+        const icon = document.createElement('div');
+        icon.className = 'sort-icon';
+        icon.textContent = 'vvv';
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove('desc', 'active');
+        elem.classList.add('asc', 'inactive');
+    });
+}
+
+function toggleSortStates(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        resetSortHeaders();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function isAllRowsHidden(value) {
+    return value.hidden == false;
+}
+
+function filterTable(elem) { // eslint-disable-line no-unused-vars
+    const outcomeAtt = 'data-test-result';
+    const outcome = elem.getAttribute(outcomeAtt);
+    const classOutcome = outcome + ' results-table-row';
+    const outcomeRows = document.getElementsByClassName(classOutcome);
+
+    for(let i = 0; i < outcomeRows.length; i++){
+        outcomeRows[i].hidden = !elem.checked;
+    }
+
+    const rows = findAll('.results-table-row').filter(isAllRowsHidden);
+    const allRowsHidden = rows.length == 0 ? true : false;
+    const notFoundMessage = document.getElementById('not-found-message');
+    notFoundMessage.hidden = !allRowsHidden;
+}
+</script>
+    <h1>report.html</h1>
+    <p>Report generated on 02-Mar-2023 at 17:35:15 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v3.2.0</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>Packages</td>
+        <td>{"pluggy": "1.0.0", "pytest": "7.2.1"}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Windows-10-10.0.19041-SP0</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{"html": "3.2.0", "metadata": "2.0.4", "xdist": "3.2.0"}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.9.13</td></tr></table>
+    <h2>Summary</h2>
+    <p>2 tests ran in 2.90 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="passed">2 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="failed">0 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable" col="duration">Duration</th>
+          <th class="sortable links" col="links">Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_CreateBoard_1.py::test_create</td>
+          <td class="col-duration">1.12</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>{&#x27;id&#x27;: &#x27;640090f97945115ad7cea4b8&#x27;, &#x27;name&#x27;: &#x27;TEST&#x27;, &#x27;desc&#x27;: &#x27;&#x27;, &#x27;descData&#x27;: None, &#x27;closed&#x27;: False, &#x27;idOrganization&#x27;: &#x27;63ae939c1aae47008c7a3719&#x27;, &#x27;idEnterprise&#x27;: None, &#x27;pinned&#x27;: False, &#x27;url&#x27;: &#x27;https://trello.com/b/VzPEzIet/test&#x27;, &#x27;shortUrl&#x27;: &#x27;https://trello.com/b/VzPEzIet&#x27;, &#x27;prefs&#x27;: {&#x27;permissionLevel&#x27;: &#x27;private&#x27;, &#x27;hideVotes&#x27;: False, &#x27;voting&#x27;: &#x27;disabled&#x27;, &#x27;comments&#x27;: &#x27;members&#x27;, &#x27;invitations&#x27;: &#x27;members&#x27;, &#x27;selfJoin&#x27;: True, &#x27;cardCovers&#x27;: True, &#x27;isTemplate&#x27;: False, &#x27;cardAging&#x27;: &#x27;regular&#x27;, &#x27;calendarFeedEnabled&#x27;: False, &#x27;hiddenPluginBoardButtons&#x27;: [], &#x27;switcherViews&#x27;: [{&#x27;viewType&#x27;: &#x27;Board&#x27;, &#x27;enabled&#x27;: True, &#x27;_id&#x27;: &#x27;640090f97945115ad7cea4b9&#x27;}, {&#x27;viewType&#x27;: &#x27;Table&#x27;, &#x27;enabled&#x27;: True, &#x27;_id&#x27;: &#x27;640090f97945115ad7cea4ba&#x27;}, {&#x27;viewType&#x27;: &#x27;Calendar&#x27;, &#x27;enabled&#x27;: False, &#x27;_id&#x27;: &#x27;640090f97945115ad7cea4bb&#x27;}, {&#x27;viewType&#x27;: &#x27;Dashboard&#x27;, &#x27;enabled&#x27;: False, &#x27;_id&#x27;: &#x27;640090f97945115ad7cea4bc&#x27;}, {&#x27;viewType&#x27;: &#x27;Timeline&#x27;, &#x27;enabled&#x27;: False, &#x27;_id&#x27;: &#x27;640090f97945115ad7cea4bd&#x27;}, {&#x27;viewType&#x27;: &#x27;Map&#x27;, &#x27;enabled&#x27;: False, &#x27;_id&#x27;: &#x27;640090f97945115ad7cea4be&#x27;}], &#x27;background&#x27;: &#x27;blue&#x27;, &#x27;backgroundColor&#x27;: &#x27;#0079BF&#x27;, &#x27;backgroundImage&#x27;: None, &#x27;backgroundImageScaled&#x27;: None, &#x27;backgroundTile&#x27;: False, &#x27;backgroundBrightness&#x27;: &#x27;dark&#x27;, &#x27;backgroundBottomColor&#x27;: &#x27;#0079BF&#x27;, &#x27;backgroundTopColor&#x27;: &#x27;#0079BF&#x27;, &#x27;canBePublic&#x27;: True, &#x27;canBeEnterprise&#x27;: True, &#x27;canBeOrg&#x27;: True, &#x27;canBePrivate&#x27;: True, &#x27;canInvite&#x27;: True}, &#x27;labelNames&#x27;: {&#x27;green&#x27;: &#x27;&#x27;, &#x27;yellow&#x27;: &#x27;&#x27;, &#x27;orange&#x27;: &#x27;&#x27;, &#x27;red&#x27;: &#x27;&#x27;, &#x27;purple&#x27;: &#x27;&#x27;, &#x27;blue&#x27;: &#x27;&#x27;, &#x27;sky&#x27;: &#x27;&#x27;, &#x27;lime&#x27;: &#x27;&#x27;, &#x27;pink&#x27;: &#x27;&#x27;, &#x27;black&#x27;: &#x27;&#x27;, &#x27;green_dark&#x27;: &#x27;&#x27;, &#x27;yellow_dark&#x27;: &#x27;&#x27;, &#x27;orange_dark&#x27;: &#x27;&#x27;, &#x27;red_dark&#x27;: &#x27;&#x27;, &#x27;purple_dark&#x27;: &#x27;&#x27;, &#x27;blue_dark&#x27;: &#x27;&#x27;, &#x27;sky_dark&#x27;: &#x27;&#x27;, &#x27;lime_dark&#x27;: &#x27;&#x27;, &#x27;pink_dark&#x27;: &#x27;&#x27;, &#x27;black_dark&#x27;: &#x27;&#x27;, &#x27;green_light&#x27;: &#x27;&#x27;, &#x27;yellow_light&#x27;: &#x27;&#x27;, &#x27;orange_light&#x27;: &#x27;&#x27;, &#x27;red_light&#x27;: &#x27;&#x27;, &#x27;purple_light&#x27;: &#x27;&#x27;, &#x27;blue_light&#x27;: &#x27;&#x27;, &#x27;sky_light&#x27;: &#x27;&#x27;, &#x27;lime_light&#x27;: &#x27;&#x27;, &#x27;pink_light&#x27;: &#x27;&#x27;, &#x27;black_light&#x27;: &#x27;&#x27;}, &#x27;limits&#x27;: {}}
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_CreateBoard_1.py::test_get</td>
+          <td class="col-duration">1.58</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>{&#x27;id&#x27;: &#x27;640090fafe5385fec96a76de&#x27;, &#x27;name&#x27;: &#x27;TEST&#x27;, &#x27;desc&#x27;: &#x27;&#x27;, &#x27;descData&#x27;: None, &#x27;closed&#x27;: False, &#x27;idOrganization&#x27;: &#x27;63ae939c1aae47008c7a3719&#x27;, &#x27;idEnterprise&#x27;: None, &#x27;pinned&#x27;: False, &#x27;url&#x27;: &#x27;https://trello.com/b/CMrhaGWC/test&#x27;, &#x27;shortUrl&#x27;: &#x27;https://trello.com/b/CMrhaGWC&#x27;, &#x27;prefs&#x27;: {&#x27;permissionLevel&#x27;: &#x27;private&#x27;, &#x27;hideVotes&#x27;: False, &#x27;voting&#x27;: &#x27;disabled&#x27;, &#x27;comments&#x27;: &#x27;members&#x27;, &#x27;invitations&#x27;: &#x27;members&#x27;, &#x27;selfJoin&#x27;: True, &#x27;cardCovers&#x27;: True, &#x27;isTemplate&#x27;: False, &#x27;cardAging&#x27;: &#x27;regular&#x27;, &#x27;calendarFeedEnabled&#x27;: False, &#x27;hiddenPluginBoardButtons&#x27;: [], &#x27;switcherViews&#x27;: [{&#x27;viewType&#x27;: &#x27;Board&#x27;, &#x27;enabled&#x27;: True, &#x27;_id&#x27;: &#x27;640090fafe5385fec96a76df&#x27;}, {&#x27;viewType&#x27;: &#x27;Table&#x27;, &#x27;enabled&#x27;: True, &#x27;_id&#x27;: &#x27;640090fafe5385fec96a76e0&#x27;}, {&#x27;viewType&#x27;: &#x27;Calendar&#x27;, &#x27;enabled&#x27;: False, &#x27;_id&#x27;: &#x27;640090fafe5385fec96a76e1&#x27;}, {&#x27;viewType&#x27;: &#x27;Dashboard&#x27;, &#x27;enabled&#x27;: False, &#x27;_id&#x27;: &#x27;640090fafe5385fec96a76e2&#x27;}, {&#x27;viewType&#x27;: &#x27;Timeline&#x27;, &#x27;enabled&#x27;: False, &#x27;_id&#x27;: &#x27;640090fafe5385fec96a76e3&#x27;}, {&#x27;viewType&#x27;: &#x27;Map&#x27;, &#x27;enabled&#x27;: False, &#x27;_id&#x27;: &#x27;640090fafe5385fec96a76e4&#x27;}], &#x27;background&#x27;: &#x27;blue&#x27;, &#x27;backgroundColor&#x27;: &#x27;#0079BF&#x27;, &#x27;backgroundImage&#x27;: None, &#x27;backgroundImageScaled&#x27;: None, &#x27;backgroundTile&#x27;: False, &#x27;backgroundBrightness&#x27;: &#x27;dark&#x27;, &#x27;backgroundBottomColor&#x27;: &#x27;#0079BF&#x27;, &#x27;backgroundTopColor&#x27;: &#x27;#0079BF&#x27;, &#x27;canBePublic&#x27;: True, &#x27;canBeEnterprise&#x27;: True, &#x27;canBeOrg&#x27;: True, &#x27;canBePrivate&#x27;: True, &#x27;canInvite&#x27;: True}, &#x27;labelNames&#x27;: {&#x27;green&#x27;: &#x27;&#x27;, &#x27;yellow&#x27;: &#x27;&#x27;, &#x27;orange&#x27;: &#x27;&#x27;, &#x27;red&#x27;: &#x27;&#x27;, &#x27;purple&#x27;: &#x27;&#x27;, &#x27;blue&#x27;: &#x27;&#x27;, &#x27;sky&#x27;: &#x27;&#x27;, &#x27;lime&#x27;: &#x27;&#x27;, &#x27;pink&#x27;: &#x27;&#x27;, &#x27;black&#x27;: &#x27;&#x27;, &#x27;green_dark&#x27;: &#x27;&#x27;, &#x27;yellow_dark&#x27;: &#x27;&#x27;, &#x27;orange_dark&#x27;: &#x27;&#x27;, &#x27;red_dark&#x27;: &#x27;&#x27;, &#x27;purple_dark&#x27;: &#x27;&#x27;, &#x27;blue_dark&#x27;: &#x27;&#x27;, &#x27;sky_dark&#x27;: &#x27;&#x27;, &#x27;lime_dark&#x27;: &#x27;&#x27;, &#x27;pink_dark&#x27;: &#x27;&#x27;, &#x27;black_dark&#x27;: &#x27;&#x27;, &#x27;green_light&#x27;: &#x27;&#x27;, &#x27;yellow_light&#x27;: &#x27;&#x27;, &#x27;orange_light&#x27;: &#x27;&#x27;, &#x27;red_light&#x27;: &#x27;&#x27;, &#x27;purple_light&#x27;: &#x27;&#x27;, &#x27;blue_light&#x27;: &#x27;&#x27;, &#x27;sky_light&#x27;: &#x27;&#x27;, &#x27;lime_light&#x27;: &#x27;&#x27;, &#x27;pink_light&#x27;: &#x27;&#x27;, &#x27;black_light&#x27;: &#x27;&#x27;}, &#x27;limits&#x27;: {}}
+<br/></div></td></tr></tbody></table></body></html>
